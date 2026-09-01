@@ -1,19 +1,26 @@
-import { pgTable, uuid, varchar, text, doublePrecision, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sqliteTable, text, real, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { foodSources } from "./food-sources";
 
-export const foods = pgTable(
+export const foods = sqliteTable(
   "foods",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sourceId: uuid("source_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    sourceId: text("source_id")
       .notNull()
       .references(() => foodSources.id, { onDelete: "cascade" }),
-    code: varchar("code", { length: 50 }).notNull(),
+    code: text("code").notNull(),
     name: text("name").notNull(),
     sourceDescription: text("source_description"),
-    bddPercent: doublePrecision("bdd_percent"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    bddPercent: real("bdd_percent"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
   },
   (table) => [
     uniqueIndex("foods_source_code_idx").on(table.sourceId, table.code),

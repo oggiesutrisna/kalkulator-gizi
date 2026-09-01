@@ -1,45 +1,20 @@
-import { getDatabase, createPgliteDatabase, AppDatabase } from "./index";
+import { getDatabase, AppDatabase } from "./index";
 import { sql } from "drizzle-orm";
-import postgres from "postgres";
 import * as fs from "fs";
 import * as path from "path";
 import * as dotenv from "dotenv";
 
 dotenv.config();
 
-export async function ensurePostgresDatabaseExists(connectionString?: string): Promise<boolean> {
-  if (!connectionString || connectionString.startsWith("pglite://")) return false;
+export async function runMigrations(targetDb?: AppDatabase): Promise<void> {
+  const activeDb: AppDatabase = targetDb || getDatabase();
+  console.log("Running database migrations...");
 
   try {
-    const url = new URL(connectionString);
-    const targetDbName = url.pathname.replace(/^\//, "");
-    if (!targetDbName || targetDbName === "postgres") return true;
-
-    url.pathname = "/postgres";
-    const adminSql = postgres(url.toString(), { connect_timeout: 3, onnotice: () => {} });
-    const existing = await adminSql`SELECT 1 FROM pg_database WHERE datname = ${targetDbName}`;
-    if (existing.length === 0) {
-      console.log(`Creating database "${targetDbName}" on PostgreSQL server...`);
-      await adminSql.unsafe(`CREATE DATABASE "${targetDbName}"`);
-      console.log(`Database "${targetDbName}" created successfully.`);
-    }
-    await adminSql.end();
-    return true;
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.log(`PostgreSQL server check info: ${message}`);
-    return false;
+    await activeDb.run(sql`PRAGMA foreign_keys = ON`);
+  } catch {
+    // ignore for libsql remote where PRAGMA may not be supported
   }
-}
-
-export async function runMigrations(targetDb?: AppDatabase): Promise<void> {
-  const connectionString = process.env.DATABASE_URL;
-  if (!targetDb && connectionString) {
-    await ensurePostgresDatabaseExists(connectionString);
-  }
-
-  let activeDb: AppDatabase = targetDb || getDatabase();
-  console.log("Running database migrations...");
 
   const migrationsDir = path.resolve(process.cwd(), "src/db/migrations");
   if (!fs.existsSync(migrationsDir)) {
@@ -52,11 +27,17 @@ export async function runMigrations(targetDb?: AppDatabase): Promise<void> {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
+  if (sqlFiles.length === 0) {
+    console.log("No migration files found.");
+    return;
+  }
+
   try {
-    await activeDb.execute(sql`SELECT 1`);
-  } catch {
-    console.warn("Primary database connection failed, falling back to local PGlite...");
-    activeDb = createPgliteDatabase();
+    await activeDb.run(sql`SELECT 1`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`Database connection failed: ${message}`);
+    throw err;
   }
 
   for (const file of sqlFiles) {
@@ -69,12 +50,13 @@ export async function runMigrations(targetDb?: AppDatabase): Promise<void> {
 
     for (const statement of statements) {
       try {
-        await activeDb.execute(sql.raw(statement));
+        await activeDb.run(sql.raw(statement));
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         if (
           !message.includes("already exists") &&
-          !message.includes("duplicate")
+          !message.includes("duplicate") &&
+          !message.toLowerCase().includes("duplicate column")
         ) {
           console.warn(`Migration statement notice (${file}): ${message}`);
         }

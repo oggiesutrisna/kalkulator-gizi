@@ -1,23 +1,30 @@
-import { pgTable, uuid, varchar, integer, doublePrecision, timestamp, index } from "drizzle-orm/pg-core";
+import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
 import { mealPlans } from "./meal-plans";
 import { foods } from "./foods";
 
-export const mealEntries = pgTable(
+export const mealEntries = sqliteTable(
   "meal_entries",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    mealPlanId: uuid("meal_plan_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    mealPlanId: text("meal_plan_id")
       .notNull()
       .references(() => mealPlans.id, { onDelete: "cascade" }),
-    mealType: varchar("meal_type", { length: 50 }).notNull(), // 'breakfast' | 'morning_snack' | 'lunch' | 'afternoon_snack' | 'dinner'
-    foodId: uuid("food_id")
+    mealType: text("meal_type").notNull(),
+    foodId: text("food_id")
       .notNull()
       .references(() => foods.id, { onDelete: "cascade" }),
-    weightGrams: doublePrecision("weight_grams").notNull(),
-    weightMode: varchar("weight_mode", { length: 20 }).notNull().default("edible"), // 'edible' | 'gross'
+    weightGrams: real("weight_grams").notNull(),
+    weightMode: text("weight_mode").notNull().default("edible"),
     position: integer("position").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdate(() => new Date()),
   },
   (table) => [
     index("meal_entries_meal_plan_id_idx").on(table.mealPlanId),

@@ -1,19 +1,23 @@
-import { pgTable, uuid, doublePrecision, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { sqliteTable, text, real, integer, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { mealPlans } from "./meal-plans";
 import { nutrients } from "./nutrients";
 
-export const nutritionTargets = pgTable(
+export const nutritionTargets = sqliteTable(
   "nutrition_targets",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    mealPlanId: uuid("meal_plan_id")
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    mealPlanId: text("meal_plan_id")
       .notNull()
       .references(() => mealPlans.id, { onDelete: "cascade" }),
-    nutrientId: uuid("nutrient_id")
+    nutrientId: text("nutrient_id")
       .notNull()
       .references(() => nutrients.id, { onDelete: "cascade" }),
-    targetValue: doublePrecision("target_value").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    targetValue: real("target_value").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (table) => [
     uniqueIndex("nutrition_targets_plan_nutrient_idx").on(table.mealPlanId, table.nutrientId),

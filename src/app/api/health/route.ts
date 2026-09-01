@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const db = getDatabase();
-    await db.execute(sql`SELECT 1`);
+    await db.run(sql`SELECT 1`);
 
     let tkpi = false;
     try {

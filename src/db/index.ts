@@ -1,22 +1,18 @@
-import { drizzle as drizzlePg, PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { drizzle as drizzlePglite, PgliteDatabase } from "drizzle-orm/pglite";
-import { PGlite } from "@electric-sql/pglite";
-import postgres from "postgres";
+import { drizzle, LibSQLDatabase } from "drizzle-orm/libsql";
+import { createClient, Client } from "@libsql/client";
 import * as schema from "./schema";
-import path from "path";
-import fs from "fs";
 
-export type AppDatabase = PostgresJsDatabase<typeof schema> | PgliteDatabase<typeof schema>;
+export type AppDatabase = LibSQLDatabase<typeof schema>;
 
 let dbInstance: AppDatabase | null = null;
+let clientInstance: Client | null = null;
 
-export function createPgliteDatabase(customDataDir?: string): PgliteDatabase<typeof schema> {
-  const targetDir = customDataDir || path.resolve(process.cwd(), ".pgdata");
-  if (!fs.existsSync(targetDir)) {
-    fs.mkdirSync(targetDir, { recursive: true });
-  }
-  const client = new PGlite(targetDir);
-  return drizzlePglite(client, { schema });
+function getDatabaseUrl(): string {
+  return process.env.DATABASE_URL || "file:./dev.db";
+}
+
+function getAuthToken(): string | undefined {
+  return process.env.TURSO_AUTH_TOKEN || process.env.DATABASE_AUTH_TOKEN || undefined;
 }
 
 export function getDatabase(): AppDatabase {
@@ -24,33 +20,41 @@ export function getDatabase(): AppDatabase {
     return dbInstance;
   }
 
-  const driver = process.env.DATABASE_DRIVER?.toLowerCase();
-  const connectionString = process.env.DATABASE_URL;
+  const url = getDatabaseUrl();
+  const authToken = getAuthToken();
 
-  if (driver === "pglite" || !connectionString || connectionString.startsWith("pglite://")) {
-    dbInstance = createPgliteDatabase();
-    return dbInstance;
-  }
+  clientInstance = createClient({
+    url,
+    authToken,
+  });
+
+  dbInstance = drizzle(clientInstance, { schema });
 
   try {
-    const client = postgres(connectionString, {
-      max: 10,
-      idle_timeout: 20,
-      connect_timeout: 2,
-      onnotice: () => {},
-    });
-    dbInstance = drizzlePg(client, { schema });
-    return dbInstance;
+    void clientInstance.execute("PRAGMA foreign_keys = ON");
   } catch {
-    dbInstance = createPgliteDatabase();
-    return dbInstance;
+    // ignore for remote
+  }
+
+  return dbInstance;
+}
+
+export function resetDatabase(): void {
+  dbInstance = null;
+  if (clientInstance) {
+    try {
+      clientInstance.close();
+    } catch {
+      // ignore
+    }
+    clientInstance = null;
   }
 }
 
 export const db = new Proxy({} as AppDatabase, {
   get(_target, prop: keyof AppDatabase) {
     const instance = getDatabase();
-    const value = instance[prop];
+    const value = instance[prop as keyof AppDatabase];
     if (typeof value === "function") {
       return (value as (...args: unknown[]) => unknown).bind(instance);
     }
