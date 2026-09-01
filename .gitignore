@@ -1,0 +1,34 @@
+# AI coding-agent configuration, skills, and local instructions
+.codex/
+.claude/
+.cursor/
+.windsurf/
+.continue/
+.aider*
+.roo/
+.cursorrules
+.clinerules
+.claudeignore
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+# AI tool workspace and generated metadata
+.ai/
+.agents/
+.antigravity/
+.opencode/
+.github/copilot-instructions.md
+
+# Local secrets and environment overrides
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Dependencies, build artifacts, and local database storage
+node_modules/
+.next/
+.pgdata/
+*.tsbuildinfo
+*.log
