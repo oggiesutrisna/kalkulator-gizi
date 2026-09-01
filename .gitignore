@@ -30,5 +30,9 @@ GEMINI.md
 node_modules/
 .next/
 .pgdata/
+*.db
+*.sqlite
+*.sqlite-journal
+dev.db
 *.tsbuildinfo
 *.log

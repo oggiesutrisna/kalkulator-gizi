@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getDatabase } from "@/db";
 import { mealPlans, mealEntries, nutritionTargets, nutrients, foods, foodNutrients } from "@/db/schema";
@@ -24,10 +24,9 @@ export async function saveMealPlanAction(
     let planId = id;
 
     if (planId) {
-      // Check if exists
       const existing = await db.select().from(mealPlans).where(eq(mealPlans.id, planId)).limit(1);
       if (existing.length === 0) {
-        planId = undefined; // Create new if ID not found
+        planId = undefined;
       } else {
         await db
           .update(mealPlans)
@@ -36,7 +35,7 @@ export async function saveMealPlanAction(
             notes: notes || null,
             sourceVersion: TKPI_SOURCE_VERSION,
             formulaVersion: NUTRITION_FORMULA_VERSION,
-            updatedAt: sql`now()`,
+            updatedAt: new Date(),
           })
           .where(eq(mealPlans.id, planId));
       }
@@ -54,7 +53,6 @@ export async function saveMealPlanAction(
         .returning();
       planId = inserted[0].id;
     }
-    // 1. Delete existing entries and replace
     await db.delete(mealEntries).where(eq(mealEntries.mealPlanId, planId));
 
     if (entries.length > 0) {
@@ -69,7 +67,6 @@ export async function saveMealPlanAction(
       await db.insert(mealEntries).values(entryValues);
     }
 
-    // 2. Delete existing targets and replace
     await db.delete(nutritionTargets).where(eq(nutritionTargets.mealPlanId, planId));
 
     const allNutrientDefs = await db.select().from(nutrients);
@@ -100,7 +97,7 @@ export async function saveMealPlanAction(
       revalidatePath("/calculator");
       revalidatePath("/plans");
     } catch {
-      // Ignored outside Next.js runtime (e.g. test environment)
+      // Ignored outside Next.js runtime
     }
 
     return { success: true, planId };
@@ -131,7 +128,6 @@ export async function getSavedMealPlansAction(): Promise<SavedMealPlanListItem[]
       return [];
     }
 
-    // Count entries per plan
     const counts = await db
       .select({
         mealPlanId: mealEntries.mealPlanId,
@@ -171,7 +167,6 @@ export async function getMealPlanByIdAction(planId: string): Promise<SavedMealPl
 
     const plan = planRows[0];
 
-    // Fetch entries
     const entriesRows = await db
       .select({
         id: mealEntries.id,
@@ -196,7 +191,6 @@ export async function getMealPlanByIdAction(planId: string): Promise<SavedMealPl
       nutrientCodeById[n.id] = n.code;
     }
 
-    // Collect all food IDs in this plan to batch-load nutrients
     const foodIds = [...new Set(entriesRows.map((e) => e.foodId))];
     const nutrientMapByFoodId: Record<string, Record<string, number | null>> = {};
     for (const fid of foodIds) {
@@ -211,9 +205,7 @@ export async function getMealPlanByIdAction(planId: string): Promise<SavedMealPl
           valuePer100g: foodNutrients.valuePer100g,
         })
         .from(foodNutrients)
-        .where(
-          sql`${foodNutrients.foodId} IN (${sql.join(foodIds.map((id) => sql`${id}`), sql`, `)})`
-        );
+        .where(inArray(foodNutrients.foodId, foodIds));
 
       for (const fn of fnRows) {
         const nCode = nutrientCodeById[fn.nutrientId];
@@ -240,7 +232,6 @@ export async function getMealPlanByIdAction(planId: string): Promise<SavedMealPl
       },
     }));
 
-    // Fetch targets
     const targetRows = await db
       .select({
         nutrientId: nutritionTargets.nutrientId,
@@ -286,7 +277,7 @@ export async function deleteMealPlanAction(
       revalidatePath("/calculator");
       revalidatePath("/plans");
     } catch {
-      // Ignored outside Next.js runtime
+      // Ignored
     }
     return { success: true };
   } catch (err: unknown) {

@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
 import * as dotenv from "dotenv";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDatabase } from "../db";
 import { runMigrations } from "../db/migrate";
 import { foodSources, foods, nutrients, foodNutrients } from "../db/schema";
@@ -298,7 +298,7 @@ export async function importTkpiData(workbookPath?: string): Promise<ImportSumma
           name: food.name,
           sourceDescription: food.sourceDescription,
           bddPercent: food.bddPercent,
-          updatedAt: sql`now()`,
+          updatedAt: new Date(),
         })
         .where(eq(foods.id, foodId));
       updatedCount++;

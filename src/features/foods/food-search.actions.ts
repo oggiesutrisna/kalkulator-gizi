@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { ilike, or, eq, sql } from "drizzle-orm";
+import { like, or, eq, sql, inArray } from "drizzle-orm";
 import { getDatabase } from "@/db";
 import { foods, nutrients, foodNutrients } from "@/db/schema";
 import { FoodWithNutrients, DatasetStatus } from "./food.types";
@@ -27,9 +27,9 @@ export async function searchFoodsAction(
   }
 
   const db = getDatabase();
-  const searchPattern = `%${query}%`;
+  const lowerPattern = `%${query.toLowerCase()}%`;
 
-  // Search by code or name
+  // Search by code or name (case-insensitive, SQLite compatible)
   const matchedFoods = await db
     .select({
       id: foods.id,
@@ -41,8 +41,8 @@ export async function searchFoodsAction(
     .from(foods)
     .where(
       or(
-        ilike(foods.code, searchPattern),
-        ilike(foods.name, searchPattern)
+        like(sql`lower(${foods.code})`, lowerPattern),
+        like(sql`lower(${foods.name})`, lowerPattern)
       )
     )
     .limit(limit);
@@ -67,9 +67,7 @@ export async function searchFoodsAction(
       valuePer100g: foodNutrients.valuePer100g,
     })
     .from(foodNutrients)
-    .where(
-      sql`${foodNutrients.foodId} IN (${sql.join(foodIds.map((id) => sql`${id}`), sql`, `)})`
-    );
+    .where(inArray(foodNutrients.foodId, foodIds));
 
   const nutrientMapByFoodId: Record<string, Record<string, number | null>> = {};
   for (const f of matchedFoods) {

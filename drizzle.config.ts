@@ -6,8 +6,8 @@ dotenv.config();
 export default defineConfig({
   schema: "./src/db/schema/index.ts",
   out: "./src/db/migrations",
-  dialect: "postgresql",
+  dialect: "sqlite",
   dbCredentials: {
-    url: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/tkpi_nutrition",
+    url: process.env.DATABASE_URL || "file:./dev.db",
   },
 });

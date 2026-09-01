@@ -15,7 +15,6 @@ export async function ensurePostgresDatabaseExists(connectionString?: string): P
     const targetDbName = url.pathname.replace(/^\//, "");
     if (!targetDbName || targetDbName === "postgres") return true;
 
-    // Connect to postgres database to check and create target database if needed
     url.pathname = "/postgres";
     const adminSql = postgres(url.toString(), { connect_timeout: 3, onnotice: () => {} });
     const existing = await adminSql`SELECT 1 FROM pg_database WHERE datname = ${targetDbName}`;
@@ -53,7 +52,6 @@ export async function runMigrations(targetDb?: AppDatabase): Promise<void> {
     .filter((f) => f.endsWith(".sql"))
     .sort();
 
-  // Test if activeDb is working; if remote Postgres fails, fallback to PGlite
   try {
     await activeDb.execute(sql`SELECT 1`);
   } catch {
